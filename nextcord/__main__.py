@@ -32,14 +32,18 @@ import aiohttp
 import platform
 
 def show_version():
-    entries = []
-
-    entries.append('- Python v{0.major}.{0.minor}.{0.micro}-{0.releaselevel}'.format(sys.version_info))
     version_info = nextcord.version_info
-    entries.append('- nextcord v{0.major}.{0.minor}.{0.micro}-{0.releaselevel}'.format(version_info))
+    entries = [
+        '- Python v{0.major}.{0.minor}.{0.micro}-{0.releaselevel}'.format(
+            sys.version_info
+        ),
+        '- nextcord v{0.major}.{0.minor}.{0.micro}-{0.releaselevel}'.format(
+            version_info
+        ),
+    ]
+
     if version_info.releaselevel != 'final':
-        pkg = pkg_resources.get_distribution('nextcord')
-        if pkg:
+        if pkg := pkg_resources.get_distribution('nextcord'):
             entries.append(f'    - nextcord pkg_resources: v{pkg.version}')
 
     entries.append(f'- aiohttp v{aiohttp.__version__}')
@@ -168,7 +172,7 @@ _base_table = {
 }
 
 # NUL (0) and 1-31 are disallowed
-_base_table.update((chr(i), None) for i in range(32))
+_base_table |= ((chr(i), None) for i in range(32))
 
 _translation_table = str.maketrans(_base_table)
 
@@ -214,7 +218,7 @@ def newbot(parser, args):
 
     try:
         with open(str(new_directory / 'bot.py'), 'w', encoding='utf-8') as fp:
-            base = 'Bot' if not args.sharded else 'AutoShardedBot'
+            base = 'AutoShardedBot' if args.sharded else 'Bot'
             fp.write(_bot_template.format(base=base, prefix=args.prefix))
     except OSError as exc:
         parser.error(f'could not create bot file ({exc})')

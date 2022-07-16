@@ -179,9 +179,7 @@ class PartialEmoji(_EmojiTag, AssetMixin):
         if self.is_unicode_emoji():
             return isinstance(other, PartialEmoji) and self.name == other.name
 
-        if isinstance(other, _EmojiTag):
-            return self.id == other.id
-        return False
+        return self.id == other.id if isinstance(other, _EmojiTag) else False
 
     def __ne__(self, other: Any) -> bool:
         return not self.__eq__(other)
@@ -198,9 +196,7 @@ class PartialEmoji(_EmojiTag, AssetMixin):
         return self.id is None
 
     def _as_reaction(self) -> str:
-        if self.id is None:
-            return self.name
-        return f'{self.name}:{self.id}'
+        return self.name if self.id is None else f'{self.name}:{self.id}'
 
     @property
     def created_at(self) -> Optional[datetime]:
@@ -208,10 +204,7 @@ class PartialEmoji(_EmojiTag, AssetMixin):
 
         .. versionadded:: 1.6
         """
-        if self.id is None:
-            return None
-
-        return utils.snowflake_time(self.id)
+        return None if self.id is None else utils.snowflake_time(self.id)
 
     @property
     def url(self) -> str:

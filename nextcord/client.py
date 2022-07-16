@@ -324,7 +324,7 @@ class Client:
         This could be referred to as the Discord WebSocket protocol latency.
         """
         ws = self.ws
-        return float('nan') if not ws else ws.latency
+        return ws.latency if ws else float('nan')
 
     def is_ws_ratelimited(self) -> bool:
         """:class:`bool`: Whether the websocket is currently rate limited.
@@ -334,9 +334,7 @@ class Client:
 
         .. versionadded:: 1.6
         """
-        if self.ws:
-            return self.ws.is_ratelimited()
-        return False
+        return self.ws.is_ratelimited() if self.ws else False
 
     @property
     def user(self) -> Optional[ClientUser]:
@@ -430,10 +428,9 @@ class Client:
 
     def dispatch(self, event: str, *args: Any, **kwargs: Any) -> None:
         _log.debug('Dispatching event %s', event)
-        method = 'on_' + event
+        method = f'on_{event}'
 
-        listeners = self._listeners.get(event)
-        if listeners:
+        if listeners := self._listeners.get(event):
             removed = []
             for i, (future, condition) in enumerate(listeners):
                 if future.cancelled():
@@ -447,7 +444,7 @@ class Client:
                     removed.append(i)
                 else:
                     if result:
-                        if len(args) == 0:
+                        if not args:
                             future.set_result(None)
                         elif len(args) == 1:
                             future.set_result(args[0])
@@ -785,7 +782,7 @@ class Client:
 
         .. versionadded: 2.0
         """
-        if self._connection._status in set(state.value for state in Status):
+        if self._connection._status in {state.value for state in Status}:
             return Status(self._connection._status)
         return Status.online
 
@@ -1202,11 +1199,7 @@ class Client:
             if me is None:
                 continue
 
-            if activity is not None:
-                me.activities = (activity,)
-            else:
-                me.activities = ()
-
+            me.activities = (activity, ) if activity is not None else ()
             me.status = status
 
     # Guild stuff
@@ -1383,11 +1376,7 @@ class Client:
             The guild created. This is not the same guild that is
             added to cache.
         """
-        if icon is not MISSING:
-            icon_base64 = utils._bytes_to_base64_data(icon)
-        else:
-            icon_base64 = None
-
+        icon_base64 = None if icon is MISSING else utils._bytes_to_base64_data(icon)
         region_value = str(region)
 
         if code:
@@ -1612,15 +1601,12 @@ class Client:
 
         if ch_type in (ChannelType.group, ChannelType.private):
             # the factory will be a DMChannel or GroupChannel here
-            channel = factory(me=self.user, data=data, state=self._connection) # type: ignore
-        else:
-            # the factory can't be a DMChannel or GroupChannel here
-            guild_id = int(data['guild_id']) # type: ignore
-            guild = self.get_guild(guild_id) or Object(id=guild_id)
+            return factory(me=self.user, data=data, state=self._connection)
+        # the factory can't be a DMChannel or GroupChannel here
+        guild_id = int(data['guild_id']) # type: ignore
+        guild = self.get_guild(guild_id) or Object(id=guild_id)
             # GuildChannels expect a Guild, we may be passing an Object
-            channel = factory(guild=guild, state=self._connection, data=data) # type: ignore
-
-        return channel
+        return factory(guild=guild, state=self._connection, data=data)
 
     async def fetch_webhook(self, webhook_id: int, /) -> Webhook:
         """|coro|
@@ -1708,8 +1694,7 @@ class Client:
             The channel that was created.
         """
         state = self._connection
-        found = state._get_private_channel_by_user(user.id)
-        if found:
+        if found := state._get_private_channel_by_user(user.id):
             return found
 
         data = await state.http.start_private_message(user.id)
@@ -1819,7 +1804,10 @@ class Client:
                 _log.info(f"nextcord.Client: Calling your application command now {app_cmd.name}")
                 await app_cmd.call_from_interaction(interaction)
             elif self._lazy_load_commands:
-                _log.info(f"nextcord.Client: Interaction command not found, attempting to lazy load.")
+                _log.info(
+                    "nextcord.Client: Interaction command not found, attempting to lazy load."
+                )
+
                 _log.debug(f"nextcord.Client: {interaction.data}")
                 response_signature = (interaction.data["name"], int(interaction.data['type']), interaction.guild_id)
                 _log.debug(f"nextcord.Client: {response_signature}")
@@ -1947,11 +1935,11 @@ class Client:
             await self._connection.delete_application_command(command, guild_id=None)
 
     def _get_global_commands(self) -> Set[ApplicationCommand]:
-        ret = set()
-        for command in self._connection._application_commands:
-            if command.is_global:
-                ret.add(command)
-        return ret
+        return {
+            command
+            for command in self._connection._application_commands
+            if command.is_global
+        }
 
     def _get_guild_rollout_commands(self) -> Dict[int, Set[ApplicationCommand]]:
         ret = {}

@@ -225,18 +225,14 @@ class Role(Hashable):
 
     def __le__(self: R, other: R) -> bool:
         r = Role.__lt__(other, self)
-        if r is NotImplemented:
-            return NotImplemented
-        return not r
+        return NotImplemented if r is NotImplemented else not r
 
     def __gt__(self: R, other: R) -> bool:
         return Role.__lt__(other, self)
 
     def __ge__(self: R, other: R) -> bool:
         r = Role.__lt__(self, other)
-        if r is NotImplemented:
-            return NotImplemented
-        return not r
+        return NotImplemented if r is NotImplemented else not r
 
     def _update(self, data: RolePayload):
         self.name: str = data['name']
@@ -312,10 +308,7 @@ class Role(Hashable):
     @property
     def mention(self) -> str:
         """:class:`str`: Returns a string that allows you to mention a role."""
-        if self.id != self.guild.id:
-            return f'<@&{self.id}>'
-        else:
-            return '@everyone'
+        return f'<@&{self.id}>' if self.id != self.guild.id else '@everyone'
 
     @property
     def members(self) -> List[Member]:
@@ -431,11 +424,7 @@ class Role(Hashable):
             colour = color
 
         if colour is not MISSING:
-            if isinstance(colour, int):
-                payload['color'] = colour
-            else:
-                payload['color'] = colour.value
-
+            payload['color'] = colour if isinstance(colour, int) else colour.value
         if name is not MISSING:
             payload['name'] = name
 

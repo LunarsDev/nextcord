@@ -498,8 +498,21 @@ class Interaction:
             If the interaction has been responded to, returns the :class:`WebhookMessage`.
         """
 
-        if not self.response.is_done():
-            return await self.response.send_message(
+        return (
+            await self.followup.send(
+                content=content,  # type: ignore
+                embed=embed,
+                embeds=embeds,
+                file=file,
+                files=files,
+                view=view,
+                tts=tts,
+                ephemeral=ephemeral,
+                delete_after=delete_after,
+                allowed_mentions=allowed_mentions,
+            )
+            if self.response.is_done()
+            else await self.response.send_message(
                 content=content,
                 embed=embed,
                 embeds=embeds,
@@ -511,17 +524,6 @@ class Interaction:
                 delete_after=delete_after,
                 allowed_mentions=allowed_mentions,
             )
-        return await self.followup.send(
-            content=content,  # type: ignore
-            embed=embed,
-            embeds=embeds,
-            file=file,
-            files=files,
-            view=view,
-            tts=tts,
-            ephemeral=ephemeral,
-            delete_after=delete_after,
-            allowed_mentions=allowed_mentions,
         )
 
     async def edit(self, *args, **kwargs) -> Optional[Message]:
@@ -672,10 +674,11 @@ class InteractionResponse:
         """
         if self._responded:
             raise InteractionResponded(self._parent)
-        if not isinstance(choices, dict):
-            choice_list = [{"name": choice, "value": choice} for choice in choices]
-        else:
-            choice_list = [{"name": key, "value": value} for key, value in choices.items()]
+        choice_list = (
+            [{"name": key, "value": value} for key, value in choices.items()]
+            if isinstance(choices, dict)
+            else [{"name": choice, "value": choice} for choice in choices]
+        )
 
         payload = {"choices": choice_list}
 
@@ -787,12 +790,11 @@ class InteractionResponse:
         if allowed_mentions is MISSING or allowed_mentions is None:
             if self._parent._state.allowed_mentions is not None:
                 payload['allowed_mentions'] = self._parent._state.allowed_mentions.to_dict()
-        else:
-            if self._parent._state.allowed_mentions is not None:
-                payload['allowed_mentions'] = self._parent._state.allowed_mentions.merge(allowed_mentions).to_dict()
-            else:
-                payload['allowed_mentions'] = allowed_mentions.to_dict()
+        elif self._parent._state.allowed_mentions is None:
+            payload['allowed_mentions'] = allowed_mentions.to_dict()
 
+        else:
+            payload['allowed_mentions'] = self._parent._state.allowed_mentions.merge(allowed_mentions).to_dict()
         parent = self._parent
         adapter = async_context.get()
         try:
@@ -917,20 +919,12 @@ class InteractionResponse:
 
         payload = {}
         if content is not MISSING:
-            if content is None:
-                payload['content'] = None
-            else:
-                payload['content'] = str(content)
-
+            payload['content'] = None if content is None else str(content)
         if embed is not MISSING and embeds is not MISSING:
             raise TypeError('cannot mix both embed and embeds keyword arguments')
 
         if embed is not MISSING:
-            if embed is None:
-                embeds = []
-            else:
-                embeds = [embed]
-
+            embeds = [] if embed is None else [embed]
         if embeds is not MISSING:
             payload['embeds'] = [e.to_dict() for e in embeds]
 
@@ -948,11 +942,7 @@ class InteractionResponse:
 
         if view is not MISSING:
             state.prevent_view_updates_for(message_id)
-            if view is None:
-                payload['components'] = []
-            else:
-                payload['components'] = view.to_components()
-
+            payload['components'] = [] if view is None else view.to_components()
         adapter = async_context.get()
         try:
             await adapter.create_interaction_response(

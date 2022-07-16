@@ -218,9 +218,7 @@ class MemberConverter(IDConverter[nextcord.Member]):
 
         # If we're not being rate limited then we can use the websocket to actually query
         members = await guild.query_members(limit=1, user_ids=[user_id], cache=cache)
-        if not members:
-            return None
-        return members[0]
+        return members[0] if members else None
 
     async def convert(self, ctx: Context, argument: str) -> nextcord.Member:
         bot = ctx.bot
@@ -356,21 +354,21 @@ class PartialMessageConverter(Converter[nextcord.PartialMessage]):
 
     @staticmethod
     def _resolve_channel(ctx, guild_id, channel_id) -> Optional[PartialMessageableChannel]:
-        if guild_id is not None:
-            guild = ctx.bot.get_guild(guild_id)
-            if guild is not None and channel_id is not None:
-                return guild._resolve_channel(channel_id)  # type: ignore
-            else:
-                return None
-        else:
+        if guild_id is None:
             return ctx.bot.get_channel(channel_id) if channel_id else ctx.channel
+        guild = ctx.bot.get_guild(guild_id)
+        return (
+            guild._resolve_channel(channel_id)
+            if guild is not None and channel_id is not None
+            else None
+        )
 
     async def convert(self, ctx: Context, argument: str) -> nextcord.PartialMessage:
         guild_id, message_id, channel_id = self._get_id_matches(ctx, argument)
-        channel = self._resolve_channel(ctx, guild_id, channel_id)
-        if not channel:
+        if channel := self._resolve_channel(ctx, guild_id, channel_id):
+            return nextcord.PartialMessage(channel=channel, id=message_id)
+        else:
             raise ChannelNotFound(channel_id)
-        return nextcord.PartialMessage(channel=channel, id=message_id)
 
 
 class MessageConverter(IDConverter[nextcord.Message]):
@@ -390,8 +388,7 @@ class MessageConverter(IDConverter[nextcord.Message]):
 
     async def convert(self, ctx: Context, argument: str) -> nextcord.Message:
         guild_id, message_id, channel_id = PartialMessageConverter._get_id_matches(ctx, argument)
-        message = ctx.bot._connection._get_message(message_id)
-        if message:
+        if message := ctx.bot._connection._get_message(message_id):
             return message
         channel = PartialMessageConverter._resolve_channel(ctx, guild_id, channel_id)
         if not channel:
@@ -658,7 +655,7 @@ class ColourConverter(Converter[nextcord.Colour]):
         if argument[0] == '#':
             return self.parse_hex_number(argument[1:])
 
-        if argument[0:2] == '0x':
+        if argument.startswith('0x'):
             rest = argument[2:]
             # Legacy backwards compatible syntax
             if rest.startswith('#'):
@@ -666,7 +663,7 @@ class ColourConverter(Converter[nextcord.Colour]):
             return self.parse_hex_number(rest)
 
         arg = argument.lower()
-        if arg[0:3] == 'rgb':
+        if arg.startswith('rgb'):
             return self.parse_rgb(arg)
 
         arg = arg.replace(' ', '_')
@@ -700,8 +697,9 @@ class RoleConverter(IDConverter[nextcord.Role]):
         if not guild:
             raise NoPrivateMessage()
 
-        match = self._get_id_match(argument) or re.match(r'<@&([0-9]{15,20})>$', argument)
-        if match:
+        if match := self._get_id_match(argument) or re.match(
+            r'<@&([0-9]{15,20})>$', argument
+        ):
             result = guild.get_role(int(match.group(1)))
         else:
             result = nextcord.utils.get(guild._roles.values(), name=argument)
@@ -757,8 +755,8 @@ class GuildConverter(IDConverter[nextcord.Guild]):
         if result is None:
             result = nextcord.utils.get(ctx.bot.guilds, name=argument)
 
-            if result is None:
-                raise GuildNotFound(argument)
+        if result is None:
+            raise GuildNotFound(argument)
         return result
 
 
@@ -813,12 +811,12 @@ class PartialEmojiConverter(Converter[nextcord.PartialEmoji]):
     """
 
     async def convert(self, ctx: Context, argument: str) -> nextcord.PartialEmoji:
-        match = re.match(r'<(a?):([a-zA-Z0-9\_]{1,32}):([0-9]{15,20})>$', argument)
-
-        if match:
-            emoji_animated = bool(match.group(1))
-            emoji_name = match.group(2)
-            emoji_id = int(match.group(3))
+        if match := re.match(
+            r'<(a?):([a-zA-Z0-9\_]{1,32}):([0-9]{15,20})>$', argument
+        ):
+            emoji_animated = bool(match[1])
+            emoji_name = match[2]
+            emoji_id = int(match[3])
 
             return nextcord.PartialEmoji.with_state(
                 ctx.bot._connection, animated=emoji_animated, name=emoji_name, id=emoji_id
@@ -1078,9 +1076,9 @@ class Greedy(List[T]):
 
 def _convert_to_bool(argument: str) -> bool:
     lowered = argument.lower()
-    if lowered in ('yes', 'y', 'true', 't', '1', 'enable', 'on'):
+    if lowered in {'yes', 'y', 'true', 't', '1', 'enable', 'on'}:
         return True
-    elif lowered in ('no', 'n', 'false', 'f', '0', 'disable', 'off'):
+    elif lowered in {'no', 'n', 'false', 'f', '0', 'disable', 'off'}:
         return False
     else:
         raise BadBoolArgument(lowered)

@@ -425,10 +425,7 @@ class Invite(Hashable):
         if channel is not None:
             return channel
 
-        if data is None:
-            return None
-
-        return PartialInviteChannel(data)
+        return None if data is None else PartialInviteChannel(data)
 
     def __str__(self) -> str:
         return self.url
@@ -451,7 +448,7 @@ class Invite(Hashable):
     @property
     def url(self) -> str:
         """:class:`str`: A property that retrieves the invite URL."""
-        return self.BASE + '/' + self.code
+        return f'{self.BASE}/{self.code}'
 
     async def delete(self, *, reason: Optional[str] = None):
         """|coro|

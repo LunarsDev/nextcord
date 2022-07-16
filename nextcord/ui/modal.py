@@ -147,18 +147,15 @@ class Modal:
         return components
 
     def to_dict(self) -> Dict[str, Any]:
-        payload = {
+        return {
             'title': self.title,
             'custom_id': self.custom_id,
             'components': self.to_components(),
         }
-        return payload
 
     @property
     def _expires_at(self) -> Optional[float]:
-        if self.timeout:
-            return time.monotonic() + self.timeout
-        return None
+        return time.monotonic() + self.timeout if self.timeout else None
 
     def add_item(self, item: Item) -> Modal:
         """Adds an item to the modal.
@@ -374,10 +371,9 @@ class ModalStore:
         return list(modals.values())
 
     def __verify_integrity(self):
-        to_remove: List[Tuple[int, Optional[int], str]] = []
-        for (k, modal) in self._modals.items():
-            if modal.is_finished():
-                to_remove.append(k)
+        to_remove: List[Tuple[int, Optional[int], str]] = [
+            k for k, modal in self._modals.items() if modal.is_finished()
+        ]
 
         for k in to_remove:
             del self._modals[k]

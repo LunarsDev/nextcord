@@ -32,7 +32,7 @@ async def roll(ctx, dice: str):
         await ctx.send('Format has to be in NdN!')
         return
 
-    result = ', '.join(str(random.randint(1, limit)) for r in range(rolls))
+    result = ', '.join(str(random.randint(1, limit)) for _ in range(rolls))
     await ctx.send(result)
 
 @bot.command(description='For when you wanna settle the score some other way')
@@ -43,7 +43,7 @@ async def choose(ctx, *choices: str):
 @bot.command()
 async def repeat(ctx, times: int, content='repeating...'):
     """Repeats a message multiple times."""
-    for i in range(times):
+    for _ in range(times):
         await ctx.send(content)
 
 @bot.command()

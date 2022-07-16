@@ -75,9 +75,7 @@ class GatewayRatelimiter:
 
     def is_ratelimited(self):
         current = time.time()
-        if current > self.window + self.per:
-            return False
-        return self.remaining == 0
+        return False if current > self.window + self.per else self.remaining == 0
 
     def get_delay(self):
         current = time.time()
@@ -99,8 +97,7 @@ class GatewayRatelimiter:
 
     async def block(self):
         async with self.lock:
-            delta = self.get_delay()
-            if delta:
+            if delta := self.get_delay():
                 _log.warning('WebSocket in shard ID %s is ratelimited, waiting %.2f seconds', self.shard_id, delta)
                 await asyncio.sleep(delta)
 
@@ -609,13 +606,13 @@ class DiscordWebSocket:
                 raise ConnectionClosed(self.socket, shard_id=self.shard_id) from exc
 
     async def change_presence(self, *, activity=None, status=None, since=0.0):
-        if activity is not None:
-            if not isinstance(activity, BaseActivity):
-                raise InvalidArgument('activity must derive from BaseActivity.')
-            activity = [activity.to_dict()]
-        else:
+        if activity is None:
             activity = []
 
+        elif not isinstance(activity, BaseActivity):
+            raise InvalidArgument('activity must derive from BaseActivity.')
+        else:
+            activity = [activity.to_dict()]
         if status == 'idle':
             since = int(time.time() * 1000)
 
@@ -767,7 +764,7 @@ class DiscordVoiceWebSocket:
     @classmethod
     async def from_client(cls, client, *, resume=False, hook=None):
         """Creates a voice websocket for the :class:`VoiceClient`."""
-        gateway = 'wss://' + client.endpoint + '/?v=4'
+        gateway = f'wss://{client.endpoint}/?v=4'
         http = client._state.http
         socket = await http.ws_connect(gateway, compress=15)
         ws = cls(socket, loop=client.loop, hook=hook)

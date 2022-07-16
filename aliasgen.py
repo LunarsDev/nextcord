@@ -23,15 +23,14 @@ DEALINGS IN THE SOFTWARE.
 """
 
 
+
 from pathlib import Path
 from importlib import import_module
 from shutil import copyfile
 
 with open(".aliasignorerc") as f:
     ignores = [line.strip() for line in f.readlines()]
-with open("alias_license.py") as f:
-    license_text = f.read()
-
+license_text = Path("alias_license.py").read_text()
 print(f"Ignoring: {ignores}")
 
 target_folder = Path("nextcord")
@@ -43,10 +42,9 @@ def scan_dir(folder):
         unprefixed = str(file)[len("nextcord") + 1:]
         should_ignore = False
         for ignore in ignores:
-            if ignore.startswith("^"):
-                if unprefixed.startswith(ignore[1:]):
-                    should_ignore = True
-                    break
+            if ignore.startswith("^") and unprefixed.startswith(ignore[1:]):
+                should_ignore = True
+                break
             if ignore in unprefixed:
                 should_ignore = True
                 break
@@ -68,12 +66,9 @@ def scan_dir(folder):
 
                 # Imports
                 module_attrs = dir(module)
-                attrs = []
-                for attr in module_attrs:
-                    if attr.startswith("__"):
-                        continue
-                    attrs.append(attr)
-                if len(attrs) > 0:
+                if attrs := [
+                    attr for attr in module_attrs if not attr.startswith("__")
+                ]:
                     alias_file += f"from {import_name} import {', '.join(attrs)}\n"
 
                 # __all__
@@ -89,7 +84,7 @@ def scan_dir(folder):
             else:
                 print(f"Copied {file}")
                 copyfile(str(file), str(alias_folder / unprefixed))
-                
+
         else:
             scan_dir(file)
 

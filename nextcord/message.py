@@ -944,29 +944,33 @@ class Message(Hashable):
 
         # fmt: off
         transformations = {
-            re.escape(f'<#{channel.id}>'): '#' + channel.name
+            re.escape(f'<#{channel.id}>'): f'#{channel.name}'
             for channel in self.channel_mentions
         }
 
+
         mention_transforms = {
-            re.escape(f'<@{member.id}>'): '@' + member.display_name
+            re.escape(f'<@{member.id}>'): f'@{member.display_name}'
             for member in self.mentions
         }
 
+
         # add the <@!user_id> cases as well..
         second_mention_transforms = {
-            re.escape(f'<@!{member.id}>'): '@' + member.display_name
+            re.escape(f'<@!{member.id}>'): f'@{member.display_name}'
             for member in self.mentions
         }
+
 
         transformations.update(mention_transforms)
         transformations.update(second_mention_transforms)
 
         if self.guild is not None:
             role_transforms = {
-                re.escape(f'<@&{role.id}>'): '@' + role.name
+                re.escape(f'<@&{role.id}>'): f'@{role.name}'
                 for role in self.role_mentions
             }
+
             transformations.update(role_transforms)
 
         # fmt: on
@@ -1069,28 +1073,32 @@ class Message(Hashable):
             return formats[created_at_ms % len(formats)].format(self.author.name)
 
         if self.type is MessageType.premium_guild_subscription:
-            if not self.content:
-                return f'{self.author.name} just boosted the server!'
-            else:
-                return f'{self.author.name} just boosted the server **{self.content}** times!'
+            return (
+                f'{self.author.name} just boosted the server **{self.content}** times!'
+                if self.content
+                else f'{self.author.name} just boosted the server!'
+            )
 
         if self.type is MessageType.premium_guild_tier_1:
-            if not self.content:
-                return f'{self.author.name} just boosted the server! {self.guild} has achieved **Level 1!**'
-            else:
-                return f'{self.author.name} just boosted the server **{self.content}** times! {self.guild} has achieved **Level 1!**'
+            return (
+                f'{self.author.name} just boosted the server **{self.content}** times! {self.guild} has achieved **Level 1!**'
+                if self.content
+                else f'{self.author.name} just boosted the server! {self.guild} has achieved **Level 1!**'
+            )
 
         if self.type is MessageType.premium_guild_tier_2:
-            if not self.content:
-                return f'{self.author.name} just boosted the server! {self.guild} has achieved **Level 2!**'
-            else:
-                return f'{self.author.name} just boosted the server **{self.content}** times! {self.guild} has achieved **Level 2!**'
+            return (
+                f'{self.author.name} just boosted the server **{self.content}** times! {self.guild} has achieved **Level 2!**'
+                if self.content
+                else f'{self.author.name} just boosted the server! {self.guild} has achieved **Level 2!**'
+            )
 
         if self.type is MessageType.premium_guild_tier_3:
-            if not self.content:
-                return f'{self.author.name} just boosted the server! {self.guild} has achieved **Level 3!**'
-            else:
-                return f'{self.author.name} just boosted the server **{self.content}** times! {self.guild} has achieved **Level 3!**'
+            return (
+                f'{self.author.name} just boosted the server **{self.content}** times! {self.guild} has achieved **Level 3!**'
+                if self.content
+                else f'{self.author.name} just boosted the server! {self.guild} has achieved **Level 3!**'
+            )
 
         if self.type is MessageType.channel_follow_add:
             return f'{self.author.name} has added {self.content} to this channel'
@@ -1283,11 +1291,7 @@ class Message(Hashable):
 
         payload: Dict[str, Any] = {}
         if content is not MISSING:
-            if content is not None:
-                payload['content'] = str(content)
-            else:
-                payload['content'] = None
-
+            payload['content'] = str(content) if content is not None else None
         if embed is not MISSING and embeds is not MISSING:
             raise InvalidArgument('cannot pass both embed and embeds parameter to edit()')
         if file is not MISSING and files is not MISSING:
@@ -1298,10 +1302,7 @@ class Message(Hashable):
             raise InvalidArgument('cannot pass both files and fileattachments parameter to edit()')
 
         if embed is not MISSING:
-            if embed is None:
-                payload['embeds'] = []
-            else:
-                payload['embeds'] = [embed.to_dict()]
+            payload['embeds'] = [] if embed is None else [embed.to_dict()]
         elif embeds is not MISSING:
             payload['embeds'] = [e.to_dict() for e in embeds]
 
@@ -1313,23 +1314,19 @@ class Message(Hashable):
         if allowed_mentions is MISSING:
             if self._state.allowed_mentions is not None and self.author.id == self._state.self_id:
                 payload['allowed_mentions'] = self._state.allowed_mentions.to_dict()
-        else:
-            if allowed_mentions is not None:
-                if self._state.allowed_mentions is not None:
-                    payload['allowed_mentions'] = self._state.allowed_mentions.merge(allowed_mentions).to_dict()
-                else:
-                    payload['allowed_mentions'] = allowed_mentions.to_dict()
+        elif allowed_mentions is not None:
+            payload['allowed_mentions'] = (
+                self._state.allowed_mentions.merge(allowed_mentions).to_dict()
+                if self._state.allowed_mentions is not None
+                else allowed_mentions.to_dict()
+            )
 
         if attachments is not MISSING:
             payload['attachments'] = [a.to_dict() for a in attachments]
 
         if view is not MISSING:
             self._state.prevent_view_updates_for(self.id)
-            if view:
-                payload['components'] = view.to_components()
-            else:
-                payload['components'] = []
-
+            payload['components'] = view.to_components() if view else []
         if file is not MISSING:
             payload["files"] = [file]
         elif files is not MISSING:
@@ -1862,11 +1859,7 @@ class PartialMessage(Hashable):
             view = None
         else:
             self._state.prevent_view_updates_for(self.id)
-            if view:
-                fields['components'] = view.to_components()
-            else:
-                fields['components'] = []
-
+            fields['components'] = view.to_components() if view else []
         if fields:
             data = await self._state.http.edit_message(self.channel.id, self.id, **fields)
 

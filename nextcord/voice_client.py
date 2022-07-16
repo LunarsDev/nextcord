@@ -359,7 +359,7 @@ class VoiceClient(VoiceProtocol):
         self._connected.set()
         return ws
 
-    async def connect(self, *, reconnect: bool, timeout: float) ->None:
+    async def connect(self, *, reconnect: bool, timeout: float) -> None:
         _log.info('Connecting to voice...')
         self.timeout = timeout
 
@@ -387,14 +387,12 @@ class VoiceClient(VoiceProtocol):
                 self.ws = await self.connect_websocket()
                 break
             except (ConnectionClosed, asyncio.TimeoutError):
-                if reconnect:
-                    _log.exception('Failed to connect to voice... Retrying...')
-                    await asyncio.sleep(1 + i * 2.0)
-                    await self.voice_disconnect()
-                    continue
-                else:
+                if not reconnect:
                     raise
 
+                _log.exception('Failed to connect to voice... Retrying...')
+                await asyncio.sleep(1 + i * 2.0)
+                await self.voice_disconnect()
         if self._runner is MISSING:
             self._runner = self.loop.create_task(self.poll_voice_ws(reconnect))
 
@@ -430,7 +428,7 @@ class VoiceClient(VoiceProtocol):
         .. versionadded:: 1.4
         """
         ws = self.ws
-        return float("inf") if not ws else ws.latency
+        return ws.latency if ws else float("inf")
 
     @property
     def average_latency(self) -> float:
@@ -439,7 +437,7 @@ class VoiceClient(VoiceProtocol):
         .. versionadded:: 1.4
         """
         ws = self.ws
-        return float("inf") if not ws else ws.average_latency
+        return ws.average_latency if ws else float("inf")
 
     async def poll_voice_ws(self, reconnect: bool) -> None:
         backoff = ExponentialBackoff()
@@ -459,13 +457,12 @@ class VoiceClient(VoiceProtocol):
                     if exc.code == 4014:
                         _log.info('Disconnected from voice by force... potentially reconnecting.')
                         successful = await self.potential_reconnect()
-                        if not successful:
-                            _log.info('Reconnect was unsuccessful, disconnecting from voice normally...')
-                            await self.disconnect()
-                            break
-                        else:
+                        if successful:
                             continue
 
+                        _log.info('Reconnect was unsuccessful, disconnecting from voice normally...')
+                        await self.disconnect()
+                        break
                 if not reconnect:
                     await self.disconnect()
                     raise
@@ -531,7 +528,7 @@ class VoiceClient(VoiceProtocol):
         struct.pack_into('>I', header, 4, self.timestamp)
         struct.pack_into('>I', header, 8, self.ssrc)
 
-        encrypt_packet = getattr(self, '_encrypt_' + self.mode)
+        encrypt_packet = getattr(self, f'_encrypt_{self.mode}')
         return encrypt_packet(header, data)
 
     def _encrypt_xsalsa20_poly1305(self, header: bytes, data) -> bytes:

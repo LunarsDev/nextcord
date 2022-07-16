@@ -148,9 +148,11 @@ class View:
     def __init_subclass__(cls) -> None:
         children: List[ItemCallbackType] = []
         for base in reversed(cls.__mro__):
-            for member in base.__dict__.values():
-                if hasattr(member, '__discord_ui_model_type__'):
-                    children.append(member)
+            children.extend(
+                member
+                for member in base.__dict__.values()
+                if hasattr(member, '__discord_ui_model_type__')
+            )
 
         if len(children) > 25:
             raise TypeError('View cannot have more than 25 children')
@@ -369,9 +371,11 @@ class View:
                 return
 
             await item.callback(interaction)
-            if not interaction.response._responded:
-                if not interaction.is_expired():
-                    await interaction.response.defer()
+            if (
+                not interaction.response._responded
+                and not interaction.is_expired()
+            ):
+                await interaction.response.defer()
         except Exception as e:
             return await self.on_error(e, item, interaction)
 
@@ -487,10 +491,9 @@ class ViewStore:
         return list(views.values())
 
     def __verify_integrity(self):
-        to_remove: List[Tuple[int, Optional[int], str]] = []
-        for (k, (view, _)) in self._views.items():
-            if view.is_finished():
-                to_remove.append(k)
+        to_remove: List[Tuple[int, Optional[int], str]] = [
+            k for k, (view, _) in self._views.items() if view.is_finished()
+        ]
 
         for k in to_remove:
             del self._views[k]

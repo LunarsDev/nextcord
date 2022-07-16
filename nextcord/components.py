@@ -332,14 +332,8 @@ class SelectOption:
         )
 
     def __str__(self) -> str:
-        if self.emoji:
-            base = f'{self.emoji} {self.label}'
-        else:
-            base = self.label
-
-        if self.description:
-            return f'{base}\n{self.description}'
-        return base
+        base = f'{self.emoji} {self.label}' if self.emoji else self.label
+        return f'{base}\n{self.description}' if self.description else base
 
     @classmethod
     def from_dict(cls, data: SelectOptionPayload) -> SelectOption:

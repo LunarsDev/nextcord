@@ -421,45 +421,41 @@ class CommandOption(SlashOption):
             )
             if ret:
                 return ret
-            else:
                 # Return an Member object if the required data is available, otherwise fallback to User.
-                if "members" in interaction.data["resolved"] and (
-                    interaction.guild,
-                    interaction.guild_id,
-                ):
-                    resolved_members_payload = interaction.data["resolved"]["members"]
-                    resolved_members: Dict[int, Member] = {}
-                    guild = interaction.guild or state._get_guild(interaction.guild_id)
-                    # Because we modify the payload further down,
-                    # a copy is made to avoid affecting methods that read the interaction data ahead of this function.
-                    for (
-                        member_id,
-                        member_payload,
-                    ) in resolved_members_payload.copy().items():
-                        member = guild.get_member(int(member_id))
-                        # Can't find the member in cache, let's construct one.
-                        if not member:
-                            user_payload = interaction.data["resolved"]["users"][
-                                member_id
-                            ]
-                            # This is required to construct the Member.
-                            member_payload["user"] = user_payload
-                            member = Member(
-                                data=member_payload, guild=guild, state=state
-                            )
-                            guild._add_member(member)
+            if "members" in interaction.data["resolved"]:
+                resolved_members_payload = interaction.data["resolved"]["members"]
+                resolved_members: Dict[int, Member] = {}
+                guild = interaction.guild or state._get_guild(interaction.guild_id)
+                # Because we modify the payload further down,
+                # a copy is made to avoid affecting methods that read the interaction data ahead of this function.
+                for (
+                    member_id,
+                    member_payload,
+                ) in resolved_members_payload.copy().items():
+                    member = guild.get_member(int(member_id))
+                    # Can't find the member in cache, let's construct one.
+                    if not member:
+                        user_payload = interaction.data["resolved"]["users"][
+                            member_id
+                        ]
+                        # This is required to construct the Member.
+                        member_payload["user"] = user_payload
+                        member = Member(
+                            data=member_payload, guild=guild, state=state
+                        )
+                        guild._add_member(member)
 
-                        resolved_members[member.id] = member
+                    resolved_members[member.id] = member
 
-                    return resolved_members[user_id]
-                else:
-                    # The interaction data gives a dictionary of resolved users, best to use it if cache isn't available.
-                    resolved_users_payload = interaction.data["resolved"]["users"]
-                    resolved_users = {
-                        int(raw_id): state.store_user(user_payload)
-                        for raw_id, user_payload in resolved_users_payload.items()
-                    }
-                    return resolved_users[user_id]
+                return resolved_members[user_id]
+            else:
+                # The interaction data gives a dictionary of resolved users, best to use it if cache isn't available.
+                resolved_users_payload = interaction.data["resolved"]["users"]
+                resolved_users = {
+                    int(raw_id): state.store_user(user_payload)
+                    for raw_id, user_payload in resolved_users_payload.items()
+                }
+                return resolved_users[user_id]
 
         elif self.type is ApplicationCommandOptionType.role:
             return interaction.guild.get_role(int(argument))
@@ -508,11 +504,9 @@ class CommandOption(SlashOption):
         # when possible minimizes the payload size and makes checks between registered and found commands easier.
         if self.required:
             ret["required"] = self.required
-        elif self.required is False:
-            pass  # Discord doesn't currently provide Required if it's False due to it being default.
-        elif self.required is MISSING and self.default:
-            pass  # If required isn't explicitly set and a default exists, don't say that this param is required.
-        else:
+        elif self.required is not False and (
+            self.required is not MISSING or not self.default
+        ):
             # While this violates Discord's default and our goal (not specified should return minimum or nothing), a
             # parameter being optional by default goes against traditional programming. A parameter not explicitly
             # stated to be optional should be required.
@@ -690,9 +684,8 @@ class ApplicationSubcommand:
         ``one two three``.
         """
 
-        parent = self.full_parent_name
-        if parent:
-            return parent + " " + self.name
+        if parent := self.full_parent_name:
+            return f"{parent} {self.name}"
         else:
             return self.name
 
@@ -780,12 +773,11 @@ class ApplicationSubcommand:
                 f"deep."
             )
         for option in self.options.values():
-            if option.autocomplete:
-                if not option.autocomplete_function:
-                    raise ValueError(
-                        f"{self.error_name} Kwarg {option.functional_name} has autocomplete enabled, but "
-                        f"no on_autocomplete assigned."
-                    )
+            if option.autocomplete and not option.autocomplete_function:
+                raise ValueError(
+                    f"{self.error_name} Kwarg {option.functional_name} has autocomplete enabled, but "
+                    f"no on_autocomplete assigned."
+                )
                 # While we could check if it has autocomplete disabled but an on_autocomplete function, why should we
                 # bother people who are likely reworking their code? It also doesn't break anything.
 
@@ -808,9 +800,9 @@ class ApplicationSubcommand:
 
         typehints = typing.get_type_hints(callback)
         for name, param in signature(self.callback).parameters.items():
-            # TODO: What kind of hardcoding is this, figure out a better way for self!
-            self_skip = name == "self"
             if first_arg:
+                # TODO: What kind of hardcoding is this, figure out a better way for self!
+                self_skip = name == "self"
                 if not self_skip:
                     first_arg = False
             else:
@@ -848,21 +840,23 @@ class ApplicationSubcommand:
     @property
     def cog_application_command_before_invoke(self) -> Optional[ApplicationHook]:
         """Returns the cog_application_command_before_invoke method for the cog that this command is in. Returns ``None`` if not the method is not found."""
-        if not self._self_argument:
-            return None
-
-        return ClientCog._get_overridden_method(
-            self._self_argument.cog_application_command_before_invoke
+        return (
+            ClientCog._get_overridden_method(
+                self._self_argument.cog_application_command_before_invoke
+            )
+            if self._self_argument
+            else None
         )
 
     @property
     def cog_application_command_after_invoke(self) -> Optional[ApplicationHook]:
         """Returns the cog_application_command_after_invoke method for the cog that this command is in. Returns ``None`` if not the method is not found."""
-        if not self._self_argument:
-            return None
-
-        return ClientCog._get_overridden_method(
-            self._self_argument.cog_application_command_after_invoke
+        return (
+            ClientCog._get_overridden_method(
+                self._self_argument.cog_application_command_after_invoke
+            )
+            if self._self_argument
+            else None
         )
 
     # Methods that can end up running the callback.
@@ -1115,20 +1109,19 @@ class ApplicationSubcommand:
         kwargs = {}
         uncalled_args = self.options.copy()
         for arg_data in option_data:
-            if arg_data["name"] in uncalled_args:
-                uncalled_args.pop(arg_data["name"])
-                kwargs[
-                    self.options[arg_data["name"]].functional_name
-                ] = await self.options[arg_data["name"]].handle_slash_argument(
-                    state, arg_data["value"], interaction
-                )
-            else:
+            if arg_data["name"] not in uncalled_args:
                 # TODO: Handle this better.
                 raise NotImplementedError(
                     f"An argument was provided that wasn't already in the function, did you"
                     f"recently change it?\nRegistered Options: {self.options}, Discord-sent"
                     f"args: {interaction.data['options']}, broke on {arg_data}"
                 )
+            uncalled_args.pop(arg_data["name"])
+            kwargs[
+                self.options[arg_data["name"]].functional_name
+            ] = await self.options[arg_data["name"]].handle_slash_argument(
+                state, arg_data["value"], interaction
+            )
         for uncalled_arg in uncalled_args.values():
             kwargs[uncalled_arg.functional_name] = uncalled_arg.default
 
@@ -1451,18 +1444,11 @@ class ApplicationCommand(ApplicationSubcommand):
         guild: Union[:class:`int`, :class:`Guild`]
             Guild or Guild ID to add this command to roll out to.
         """
-        if isinstance(guild, Guild):
-            # I don't like doing `guild = guild.id` and this keeps it extendable.
-            guild_id = guild.id
-        else:
-            guild_id = guild
+        guild_id = guild.id if isinstance(guild, Guild) else guild
         self._guild_ids_to_rollout.add(guild_id)
 
     def remove_guild_rollout(self, guild: Union[int, Guild]) -> None:
-        if isinstance(guild, Guild):
-            guild_id = guild.id
-        else:
-            guild_id = guild
+        guild_id = guild.id if isinstance(guild, Guild) else guild
         self._guild_ids_to_rollout.remove(guild_id)
 
     @property
@@ -1484,12 +1470,12 @@ class ApplicationCommand(ApplicationSubcommand):
     @property
     def is_guild(self) -> bool:
         """Returns True if any guild IDs have been added."""
-        return True if (self._guild_ids or self._guild_ids_to_rollout) else False
+        return bool((self._guild_ids or self._guild_ids_to_rollout))
 
     @property
     def is_global(self) -> bool:
         """Returns True if either force_global is True or no guild_ids are given."""
-        return True if (self.force_global or not self.is_guild) else False
+        return bool((self.force_global or not self.is_guild))
 
     def set_state(self, state: ConnectionState) -> ApplicationCommand:
         """Sets the ConnectionState object used for getting cached data."""
@@ -1604,9 +1590,8 @@ class ApplicationCommand(ApplicationSubcommand):
         message = Message(channel=channel, data=message_data, state=self._state)
         if cached_message := self._state._get_message(message.id):
             return cached_message
-        else:
-            if self._state._messages is not None:
-                self._state._messages.append(message)
+        if self._state._messages is not None:
+            self._state._messages.append(message)
         return message
 
     def _handle_resolved_user(
@@ -1730,11 +1715,11 @@ class ApplicationCommand(ApplicationSubcommand):
         """
         modded_payload = raw_payload.copy()
         modded_payload.pop("id")
-        for our_payload in self.payload:
-            if our_payload.get("guild_id", None) == guild_id:
-                if self._recursive_item_check(modded_payload, our_payload):
-                    return True
-        return False
+        return any(
+            our_payload.get("guild_id", None) == guild_id
+            and self._recursive_item_check(modded_payload, our_payload)
+            for our_payload in self.payload
+        )
 
     def _recursive_item_check(self, item1, item2) -> bool:
         """Checks if item1 and item2 are equal.
@@ -1763,19 +1748,16 @@ class ApplicationCommand(ApplicationSubcommand):
         return True
 
     def _recursive_check_item_against_list(self, item1, list2: list) -> bool:
-        if isinstance(item1, list):
+        if isinstance(item1, list) or not isinstance(item1, dict):
             raise NotImplementedError
-        elif isinstance(item1, dict):
-            for item2 in list2:
-                if isinstance(item2, list):
-                    raise NotImplementedError
-                elif isinstance(item2, dict):
-                    if self._recursive_item_check(item1, item2):
-                        return True
-                else:
-                    raise NotImplementedError
-        else:
-            raise NotImplementedError
+        for item2 in list2:
+            if isinstance(item2, list):
+                raise NotImplementedError
+            elif isinstance(item2, dict):
+                if self._recursive_item_check(item1, item2):
+                    return True
+            else:
+                raise NotImplementedError
         return False
 
     def verify_content(self):
@@ -1929,24 +1911,21 @@ class ApplicationCommand(ApplicationSubcommand):
             .. note::
                 Any ``application_command_before_invoke`` or ``application_command_after_invoke``'s defined on this will override parent ones.
         """
-        # At this time, non-slash commands cannot have Subcommands.
         if self.type != ApplicationCommandType.chat_input:
             raise TypeError(f"{self.error_name} {self.type} cannot have subcommands.")
-        else:
+        def decorator(func: Callable):
+            result = ApplicationSubcommand(
+                callback=func,
+                parent_command=self,
+                cmd_type=ApplicationCommandOptionType.sub_command,
+                name=name,
+                description=description,
+                inherit_hooks=inherit_hooks,
+            )
+            self.children[result.name] = result
+            return result
 
-            def decorator(func: Callable):
-                result = ApplicationSubcommand(
-                    callback=func,
-                    parent_command=self,
-                    cmd_type=ApplicationCommandOptionType.sub_command,
-                    name=name,
-                    description=description,
-                    inherit_hooks=inherit_hooks,
-                )
-                self.children[result.name] = result
-                return result
-
-            return decorator
+        return decorator
 
 
 def slash_command(
@@ -2088,10 +2067,10 @@ def check_dictionary_values(dict1: dict, dict2: dict, *keywords) -> bool:
     :class:`bool`
         True if keyword values in both dictionaries match, False otherwise.
     """
-    for keyword in keywords:
-        if dict1.get(keyword, None) != dict2.get(keyword, None):
-            return False
-    return True
+    return all(
+        dict1.get(keyword, None) == dict2.get(keyword, None)
+        for keyword in keywords
+    )
 
 
 def deep_dictionary_check(dict1: dict, dict2: dict) -> bool:

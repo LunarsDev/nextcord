@@ -66,7 +66,7 @@ __all__ = (
 
 
 def _create_value_cls(name, comparable):
-    cls = namedtuple('_EnumValue_' + name, 'name value')
+    cls = namedtuple(f'_EnumValue_{name}', 'name value')
     cls.__repr__ = lambda self: f'<{name}.{self.name}: {self.value!r}>'
     cls.__str__ = lambda self: f'{name}.{self.name}'
     if comparable:
@@ -125,35 +125,35 @@ class EnumMeta(type):
         value_cls._actual_enum_cls_ = actual_cls  # type: ignore
         return actual_cls
 
-    def __iter__(cls):
+    def __iter__(self):
         return (cls._enum_member_map_[name] for name in cls._enum_member_names_)
 
-    def __reversed__(cls):
+    def __reversed__(self):
         return (cls._enum_member_map_[name] for name in reversed(cls._enum_member_names_))
 
-    def __len__(cls):
-        return len(cls._enum_member_names_)
+    def __len__(self):
+        return len(self._enum_member_names_)
 
-    def __repr__(cls):
-        return f'<enum {cls.__name__}>'
+    def __repr__(self):
+        return f'<enum {self.__name__}>'
 
     @property
-    def __members__(cls):
-        return types.MappingProxyType(cls._enum_member_map_)
+    def __members__(self):
+        return types.MappingProxyType(self._enum_member_map_)
 
-    def __call__(cls, value):
+    def __call__(self, value):
         try:
-            return cls._enum_value_map_[value]
+            return self._enum_value_map_[value]
         except (KeyError, TypeError):
-            raise ValueError(f"{value!r} is not a valid {cls.__name__}")
+            raise ValueError(f"{value!r} is not a valid {self.__name__}")
 
-    def __getitem__(cls, key):
-        return cls._enum_member_map_[key]
+    def __getitem__(self, key):
+        return self._enum_member_map_[key]
 
-    def __setattr__(cls, name, value):
+    def __setattr__(self, name, value):
         raise TypeError('Enums are immutable.')
 
-    def __delattr__(cls, attr):
+    def __delattr__(self, attr):
         raise TypeError('Enums are immutable')
 
     def __instancecheck__(self, instance):

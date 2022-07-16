@@ -253,7 +253,7 @@ class ScheduledEvent(Hashable):
         self.channel_id: Optional[int] = data.get('channel_id')
         self._users: Dict[int, ScheduledEventUser] = {}
         self._update_users(data.get('users', []))
-        
+
         if image := data.get("image"):
             self.image: Optional[Asset] = Asset._from_scheduled_event_image(self._state, self.id, image)
         else:
@@ -394,11 +394,7 @@ class ScheduledEvent(Hashable):
         if status is not MISSING:
             payload['status'] = status.value
         if image is not MISSING:
-            if image is None:
-                payload['image'] = image
-            else:
-                payload['image'] = _bytes_to_base64_data(image)
-
+            payload['image'] = image if image is None else _bytes_to_base64_data(image)
         if not payload:
             return self
         data = await self._state.http.edit_event(self.guild.id, self.id, reason=reason, **payload)

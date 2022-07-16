@@ -158,7 +158,7 @@ class TextInput(Item[V]):
     def label(self, value: str):
         if value is None:
             raise TypeError('label must cannot be None')
-        self._underlying.label = str(value)
+        self._underlying.label = value
     
     @property
     def min_length(self) -> int:

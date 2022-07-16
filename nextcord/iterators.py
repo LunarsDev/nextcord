@@ -213,7 +213,7 @@ class ReactionIterator(_AsyncIterator[Union['User', 'Member']]):
         from .user import User
 
         if self.limit > 0:
-            retrieve = self.limit if self.limit <= 100 else 100
+            retrieve = min(self.limit, 100)
 
             after = self.after.id if self.after else None
             data: List[PartialUserPayload] = await self.getter(
@@ -280,11 +280,7 @@ class HistoryIterator(_AsyncIterator['Message']):
         if isinstance(around, datetime.datetime):
             around = Object(id=time_snowflake(around))
 
-        if oldest_first is None:
-            self.reverse = after is not None
-        else:
-            self.reverse = oldest_first
-
+        self.reverse = after is not None if oldest_first is None else oldest_first
         self.messageable = messageable
         self.limit = limit
         self.before = before
@@ -312,15 +308,14 @@ class HistoryIterator(_AsyncIterator['Message']):
                 self._filter = lambda m: int(m['id']) < self.before.id
             elif self.after:
                 self._filter = lambda m: self.after.id < int(m['id'])
+        elif self.reverse:
+            self._retrieve_messages = self._retrieve_messages_after_strategy  # type: ignore
+            if self.before:
+                self._filter = lambda m: int(m['id']) < self.before.id
         else:
-            if self.reverse:
-                self._retrieve_messages = self._retrieve_messages_after_strategy  # type: ignore
-                if self.before:
-                    self._filter = lambda m: int(m['id']) < self.before.id
-            else:
-                self._retrieve_messages = self._retrieve_messages_before_strategy  # type: ignore
-                if self.after and self.after != OLDEST_OBJECT:
-                    self._filter = lambda m: int(m['id']) > self.after.id
+            self._retrieve_messages = self._retrieve_messages_before_strategy  # type: ignore
+            if self.after and self.after != OLDEST_OBJECT:
+                self._filter = lambda m: int(m['id']) > self.after.id
 
     async def next(self) -> Message:
         if self.messages.empty():
@@ -333,10 +328,7 @@ class HistoryIterator(_AsyncIterator['Message']):
 
     def _get_retrieve(self):
         l = self.limit
-        if l is None or l > 100:
-            r = 100
-        else:
-            r = l
+        r = 100 if l is None or l > 100 else l
         self.retrieve = r
         return r > 0
 
@@ -401,11 +393,7 @@ class AuditLogIterator(_AsyncIterator['AuditLogEntry']):
         if isinstance(after, datetime.datetime):
             after = Object(id=time_snowflake(after, high=True))
 
-        if oldest_first is None:
-            self.reverse = after is not None
-        else:
-            self.reverse = oldest_first
-
+        self.reverse = after is not None if oldest_first is None else oldest_first
         self.guild = guild
         self.loop = guild._state.loop
         self.request = guild._state.http.get_audit_logs
@@ -466,10 +454,7 @@ class AuditLogIterator(_AsyncIterator['AuditLogEntry']):
 
     def _get_retrieve(self):
         l = self.limit
-        if l is None or l > 100:
-            r = 100
-        else:
-            r = l
+        r = 100 if l is None or l > 100 else l
         self.retrieve = r
         return r > 0
 
@@ -564,10 +549,7 @@ class GuildIterator(_AsyncIterator['Guild']):
 
     def _get_retrieve(self):
         l = self.limit
-        if l is None or l > 100:
-            r = 100
-        else:
-            r = l
+        r = 100 if l is None or l > 100 else l
         self.retrieve = r
         return r > 0
 
@@ -638,28 +620,26 @@ class MemberIterator(_AsyncIterator['Member']):
 
     def _get_retrieve(self):
         l = self.limit
-        if l is None or l > 1000:
-            r = 1000
-        else:
-            r = l
+        r = 1000 if l is None or l > 1000 else l
         self.retrieve = r
         return r > 0
 
     async def fill_members(self):
-        if self._get_retrieve():
-            after = self.after.id if self.after else None
-            data = await self.get_members(self.guild.id, self.retrieve, after)
-            if not data:
-                # no data, terminate
-                return
+        if not self._get_retrieve():
+            return
+        after = self.after.id if self.after else None
+        data = await self.get_members(self.guild.id, self.retrieve, after)
+        if not data:
+            # no data, terminate
+            return
 
-            if len(data) < 1000:
-                self.limit = 0  # terminate loop
+        if len(data) < 1000:
+            self.limit = 0  # terminate loop
 
-            self.after = Object(id=int(data[-1]['user']['id']))
+        self.after = Object(id=int(data[-1]['user']['id']))
 
-            for element in reversed(data):
-                await self.members.put(self.create_member(element))
+        for element in reversed(data):
+            await self.members.put(self.create_member(element))
 
     def create_member(self, data):
         from .member import Member
@@ -691,15 +671,16 @@ class ArchivedThreadIterator(_AsyncIterator['Thread']):
         if before is None:
             self.before = None
         elif isinstance(before, datetime.datetime):
-            if joined:
-                self.before = str(time_snowflake(before, high=False))
-            else:
-                self.before = before.isoformat()
+            self.before = (
+                str(time_snowflake(before, high=False))
+                if joined
+                else before.isoformat()
+            )
+
+        elif joined:
+            self.before = str(before.id)
         else:
-            if joined:
-                self.before = str(before.id)
-            else:
-                self.before = snowflake_time(before.id).isoformat()
+            self.before = snowflake_time(before.id).isoformat()
 
         self.update_before: Callable[[ThreadPayload], str] = self.get_archive_timestamp
 
